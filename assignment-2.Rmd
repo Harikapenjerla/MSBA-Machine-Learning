@@ -1,0 +1,226 @@
+---
+title: "knn model"
+author: "Harika"
+date: "10/12/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+#libraries used in this code
+
+library(caret)    
+library(dplyr)
+library(MASS)
+library(class)
+library(gmodels)
+
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+# Read data from the file .csv
+
+data <- read.csv("UniversalBank.csv")
+head(data)
+str(data)
+
+#To remove unwanted data
+
+data <- data[,c(-1,-5)]
+str(data)
+
+#EDUCATION HAS MORE THAN TWO CATAGORIES so use dummy variables
+
+test1 <- data$Education
+test_factor <- factor(test1, label =c("E1","E2","E3"))
+str(test_factor)
+data[["Education"]] <- test_factor
+levels(data$Education)
+
+#Using dummyVars function
+
+dummy_model <- dummyVars("~Education", data=data)
+y <- predict(dummy_model,newdata=data)
+#print(y)
+data <- cbind(data, y)
+data <- data[, c(-6)]
+
+
+```
+
+
+```{r cars}
+# Normalization
+# data needs to be normalized in this data it is needed to do only for columns 1,2,3,4,5,6 in detail
+
+norm_model<-preProcess(data, method = c("range"))
+Default_normalized<-predict(norm_model,data)
+summary(Default_normalized)
+
+```
+
+
+```{r cars}
+#data partitioning which is 60 % for training set and remaining for validation test
+set.seed(15)
+partition <- createDataPartition(Default_normalized$Personal.Loan, p=0.6, list=FALSE)
+training_data <- Default_normalized[partition,]
+dim(training_data)
+validation_data <- Default_normalized[-partition,]
+dim(validation_data)
+
+
+Train_Predictors<-training_data[,-7]
+validation_Predictors<-validation_data[,-7]
+Train_labels <-training_data[,7]
+train.f <- as.factor(Train_labels)
+validation_labels  <-validation_data[,7]
+valid_f <- as.factor(validation_labels)
+```
+
+
+```{r cars}
+#Knn method where k=1
+Predicted_Test_labels <- knn(Train_Predictors, validation_Predictors, cl=train.f, k=1, prob = TRUE)
+#str(Predicted_Test_labels)
+
+```
+
+
+```{r cars}
+#Finding for particular values of each variables as given in question
+
+test2 <- c(40, 10, 84, 2, 2, 0, 0, 0, 1, 1, 0, 1, 0)
+Predicted_Test_label2 <- knn(Train_Predictors,test2 , cl=train.f, k=1, prob = TRUE)
+Predicted_Test_label2
+#str(Predicted_Test_label2)
+
+```
+
+
+```{r cars}
+
+
+#Finding k that balances between overfittting and ingorning predictor information
+
+validation_labels2 <- as.factor(validation_labels)
+accuracy.my <- data.frame(k = seq(1, 100, 1), accuracy = rep(0, 100))
+
+# compute knn for different k on validation.
+for(i in 1:100) {
+  Predicted_Test_labels3 <- knn(Train_Predictors, validation_Predictors, cl=train.f, k=i)
+  accuracy.my[i, 2] <- confusionMatrix(Predicted_Test_labels3, valid_f)$overall[1] 
+}
+accuracy.my
+better_k <- accuracy.my[which.max(accuracy.my$accuracy),]
+better_k
+```
+
+
+```{r cars}
+
+#Confusion matrix
+
+Predicted_Test_label5 <- knn(Train_Predictors, validation_Predictors , cl=Train_labels, k=3, prob = TRUE)
+#Predicted_Test_label5
+CrossTable(x=valid_f, y=Predicted_Test_label5, prop.chisq = FALSE)
+
+```
+
+
+```{r cars}
+# following customer when k=3 accuracy has 96.15%
+
+test2 <- c(40, 10, 84, 2, 2, 0, 0, 0, 1, 1, 0, 1, 0)
+Predicted_Test_label4 <- knn(Train_Predictors, test2 , cl=train.f, k=3, prob = TRUE)
+Predicted_Test_label4
+#str(Predicted_Test_label4)
+
+```
+
+
+```{r}
+# For 5th question we need to split data into three sets like training,validation and test sets and also use k value as 3 adn compare the models.
+
+#READ THE DATA
+
+data <- read.csv("UniversalBank.csv")
+head(data)
+str(data)
+
+#TO REMOVE UNWANTED COLUMNS IN DATA
+data <- data[,c(-1,-5)]
+str(data)
+
+#EDUCATION HAS MORE THAN TWO CATAGORIES so use dummy variables
+test1 <- data$Education
+test_factor <- factor(test1, label =c("E1","E2","E3"))
+str(test_factor)
+data[["Education"]] <- test_factor
+levels(data$Education)
+
+#Using dummyVars function
+
+dummy_model <- dummyVars("~Education", data=data)
+y <- predict(dummy_model,newdata=data)
+data <- cbind(data, y)
+data <- data[, c(-6)]
+
+#NOrmalization
+
+norm_model<-preProcess(data, method = c("range"))
+Default_normalized<-predict(norm_model,data)
+summary(Default_normalized)
+
+#data partition
+
+set.seed(15)
+Test_Index <- createDataPartition(Default_normalized$Personal.Loan,p=0.2, list=FALSE) # 20% reserved for Test
+Test_Data <- data[Test_Index,]
+TraVal_Data <- data[-Test_Index,] # Validation and Training data is rest
+
+Train_Index = createDataPartition(TraVal_Data$Personal.Loan,p=0.3, list=FALSE) # 50% of remaining data as training and 30% as validation data.
+Train_Data = TraVal_Data[-Train_Index,]
+Validation_Data = TraVal_Data[Train_Index,] 
+
+summary(Train_Data)
+
+Train_Predictors<-Train_Data[,-7]
+validation_Predictors<- Validation_Data[,-7]
+valid_f <- as.factor(validation_labels)
+Train_labels <- Train_Data[,7]
+train.f <- as.factor(Train_labels)
+validation_labels  <-Validation_Data[,7]
+test_labels <- Test_Data[,7]
+test.f <- as.factor(test_labels)
+test_predictors <- Test_Data[,-7]
+
+Predicted_Test_labels <- knn(Train_Predictors, test_predictors, cl=train.f, k=3, prob = TRUE)
+Predicted_Test_labels
+
+accuracy.my <- data.frame(k = seq(1, 25, 1), accuracy = rep(0, 25))
+
+# compute knn for different k on validation.
+for(i in 1:25) {
+  Predicted_Test_labels3 <- knn(Train_Predictors, validation_Predictors, cl=train.f, k=i)
+  accuracy.my[i, 2] <- confusionMatrix(Predicted_Test_labels3, valid_f)$overall[1] 
+}
+accuracy.my
+better_k <- accuracy.my[which.max(accuracy.my$accuracy),]
+better_k
+Predicted_Test_labels5 <- knn(validation_Predictors, test_predictors, cl=valid_f, k=3, prob = TRUE)
+CrossTable(x=test_labels, y=Predicted_Test_labels3, prop.chisq = FALSE)
+
+CrossTable(x=test_labels, y=Predicted_Test_labels5, prop.chisq = FALSE)
+
+```
+```{r}
+# Partitioning the data into three sets like training,validation,test and applying knn algorithm with k in above model ,confusion matrix accuracy is decreased.
+```
+
+
