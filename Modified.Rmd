@@ -1,0 +1,132 @@
+---
+title: "Modified Assignment-2"
+author: "Harika"
+date: "10/22/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+#libraries used in this code
+
+library(caret)    
+library(dplyr)
+library(MASS)
+library(class)
+library(gmodels)
+library(dummies)
+
+
+data <- read.csv("UniversalBank.csv")
+head(data)
+str(data)
+
+#To remove unwanted data
+
+data <- data[,c(-1,-5)]
+str(data)
+
+#EDUCATION HAS MORE THAN TWO CATAGORIES so use dummy variables
+
+test1 <- data$Education
+test_factor <- factor(test1, label =c("E1","E2","E3"))
+str(test_factor)
+data[["Education"]] <- test_factor
+levels(data$Education)
+
+#Using dummyVars function
+
+dummy_model <- dummyVars("~Education", data=data)
+y <- predict(dummy_model,newdata=data)
+#print(y)
+data <- cbind(data, y)
+data <- data[, c(-6)]
+
+
+
+```
+
+Partition the data into training (60%) and validation (40%) sets.
+Question 1.Consider the following customer:
+Age = 40, Experience = 10, Income = 84, Family = 2, CCAvg = 2, Education_1 = 0, Education_2 = 1, Education_3 = 0, Mortgage = 0, Securities Account = 0, CD Account = 0, Online = 1, and Credit Card = 1. Perform a k-NN classification with all predictors except ID and ZIP code using k = 1. Remember to transform categorical predictors with more than two categories into dummy variables first. Specify the success class as 1 (loan acceptance), and use the default cutoff value of 0.5. How would this customer be classified?
+
+
+```{r cars}
+
+#data partitioning as 60 % for training set and remaining for validation test
+set.seed(15)
+partition <- createDataPartition(data$Personal.Loan, p=0.6, list=FALSE)
+
+training_data <- data[partition,]
+dim(training_data)
+validation_data <- data[-partition,]
+dim(validation_data)
+
+
+#Normalization on training set 
+n_data <- preProcess(training_data, method = c ("center", "scale"))
+train.norm.df <- predict(n_data, training_data)
+
+Valid.norm.df <- predict(n_data, validation_data)
+
+Total.norm.df <- predict(n_data, data)
+
+summary(train.norm.df)
+summary(Valid.norm.df)
+summary(Total.norm.df)
+#train_norm <- predict(n_data, training_data)
+
+Train_Predictors<-train.norm.df[,-7]
+validation_Predictors<-Valid.norm.df[,-7]
+Train_labels <-train.norm.df[,7]
+Train_f <- as.factor(Train_labels)
+
+  validation_labels  <-Valid.norm.df[,7]
+valid_f <- as.factor((validation_labels))
+
+Data <- Total.norm.df[,-7]
+Data_labels1 <- factor(data[,7], levels = c(0,1), labels = c("Deny", "Accept"))
+
+#Knn method where k=1
+test <- knn(Train_Predictors, validation_Predictors, cl=Train_labels, k=1, prob = TRUE)
+
+
+test1 <- c(40, 10, 84, 2, 2, 0, 0, 0, 1, 1, 0, 1, 0)
+Predicted_Test_label2 <- knn(Train_Predictors, test1 , cl=Train_labels, k=1, prob = TRUE)
+Predicted_Test_label2
+```
+Question 2.2.	What is a choice of k that balances between overfitting and ignoring the predictor information?
+
+```{r}
+#validation_labels2 <- as.factor(validation_labels)
+accuracy.my <- data.frame(k = seq(1, 50, 1), accuracy = rep(0, 50))
+
+for(i in 1:50) {
+  Predicted_Test_labels3 <- knn(Train_Predictors, validation_Predictors, cl=Train_f, k=i)
+  accuracy.my[i, 2] <- confusionMatrix(Predicted_Test_labels3, valid_f)$overall[1] 
+}
+accuracy.my
+better_k <- accuracy.my[which.max(accuracy.my$accuracy),]
+better_k
+
+```
+Question 3.	Show the confusion matrix for the validation data that results from using the best k.
+```
+```{r}
+Predicted_Test_label5 <- knn(Train_Predictors, validation_Predictors , cl=Train_f, k=3, prob = TRUE)                                                                    
+CrossTable(x=valid_f, y=Predicted_Test_label5, prop.chisq = FALSE)
+```
+
+Question 4.	Consider the following customer: Age = 40, Experience = 10, Income = 84,
+Family = 2, CCAvg = 2, Education_1 = 0, Education_2 = 1, Education_3 = 0,
+Mortgage = 0, Securities Account = 0, CD Account = 0, Online = 1 and Credit
+Card = 1. Classify the customer using the best k.
+
+
+```{r}
+test2 <- c(40, 10, 84, 2, 2, 0, 0, 0, 1, 1, 0, 1, 0)
+Predicted_Test_label4 <- knn(Train_Predictors, test2 , cl=Train_f, k=3, prob = TRUE)
+Predicted_Test_label4
+
+```
+
+

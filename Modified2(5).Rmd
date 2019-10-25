@@ -1,0 +1,81 @@
+---
+title: "Assignment2.5"
+author: "Harika"
+date: "10/24/2019"
+output: html_document
+---
+5.	Repartition the data, this time into training, validation, and test sets (50% : 30% : 20%). Apply the k-NN method with the k chosen above. Compare the confusion matrix of the test set with that of the training and validation sets. Comment on the differences and their reason.
+
+```{r cars}
+library(caret)    
+library(dplyr)
+library(MASS)
+library(class)
+library(gmodels)
+library(dummies)
+Data <- read.csv("UniversalBank.csv")
+head(Data)
+```
+
+```{r}
+Data <- Data[,c(-1,-5)]
+str(Data)
+
+test <- Data$Education
+Test <- factor(test, label =c("E1","E2","E3"))
+str(Test)
+Data[["Education"]] <- Test
+levels(Data$Education)
+
+Dummy<- dummyVars("~Education", data=Data)
+x <- predict(Dummy,newdata=Data)
+
+Data <- cbind(Data, x)
+Data <- Data[, c(-6)]
+```
+
+```{r}
+#Data Partition according to the question
+set.seed(15)
+Test_Index <- createDataPartition(Data$Personal.Loan,p=0.2, list=FALSE) 
+Test_Data <- Data[Test_Index,]
+TraVal_Data <- Data[-Test_Index,]
+
+Train_Index = createDataPartition(TraVal_Data$Personal.Loan,p=0.625, list=FALSE)
+Train_Data = TraVal_Data[Train_Index,]
+Valid_data = TraVal_Data[-Train_Index,] 
+summary(Train_Data)
+
+#Normalize the data
+
+normalization<-preProcess(Train_Data, method = c("center","scale"))
+Train_Norm<-predict(normalization,Train_Data)
+Test_Norm<-predict(normalization,Test_Data)
+Validation_Norm<-predict(normalization,Valid_data)
+All_Data_Norm<-predict(normalization,Data)
+
+Train_Predictors<-Train_Norm[,-7]
+Test_predictors <- Test_Norm[,-7]
+validation_Predictors<- Validation_Norm[,-7]
+All_Data_Predictors<- All_Data_Norm[,-7]
+
+Train_labels <-factor(Train_Data[,7], levels=c(0,1))
+Validation_labels  <-factor(Valid_data[,7], levels=c(0,1))
+Test_labels <- factor(Test_Data[,7], levels=c(0,1))
+All_Data_labels <- factor(Data[,7], levels=c(0,1))
+```
+
+```{r}
+Predicted_Test_labels <- knn(Train_Predictors, Test_predictors, cl=Train_labels, k=3, prob = TRUE)
+str(Predicted_Test_labels)
+Predicted_Valid_labels <- knn(Train_Predictors, validation_Predictors, cl=Train_labels, k=3, prob = TRUE)
+str(Predicted_Valid_labels)
+
+
+library(gmodels)
+CrossTable(x=Validation_labels, y=Predicted_Valid_labels, prop.chisq = FALSE)
+
+CrossTable(x=Test_labels, y=Predicted_Test_labels, prop.chisq = FALSE)
+```
+
+# The accuracy of the model here is reduced when compared to previous data partition because the data given to train is reduced then initially.
