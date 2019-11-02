@@ -1,0 +1,188 @@
+---
+title: "K-means clustering"
+author: "Harika"
+date: "11/1/2019"
+output:
+  html_document: default
+  pdf_document: default
+---
+Libraries may useful in this k-means clustering
+```{r}
+library(tidyr)
+library(tidyselect)
+library(factoextra)
+library(magrittr)
+library(caret)
+library(VIM)
+library(dplyr)
+library(magrittr)
+library(imputeTS)
+library(stats)
+library(flexclust)
+```
+Given information
+The dataset on American College and University Rankings contains information on 1302 American colleges and universities offering an undergraduate program. For each university, there are 17 measurements, including continuous measurements (such as tuition and grad- uation rate) and categorical measurements (such as location by state and whether it is a private or public school).
+
+Question1:Remove all records with missing measurements from the dataset.
+```{r}
+#read data 
+Mydata <- read.csv("Universities.csv")
+str(Mydata)
+
+#removing missing measurements from dataset
+Mydata_all <- na.omit(Mydata)
+
+#Having only continuous variables
+Mydata1 <- Mydata_all[-c(1, 2, 3) ]
+str(Mydata1)
+summary(Mydata1)
+summary(Mydata_all)
+```
+
+2.	For all the continuous measurements, run K-Means clustering. Make sure to normalize the measurements. How many clusters seem reasonable for describing these data? What was your optimal K?
+```{r}
+#Data normalization(preprocessing)
+set.seed(123)
+Mydata1_norm <- preProcess(Mydata1, method=c("center", "scale"))
+Mydata1_norm <- predict(Mydata1_norm,Mydata1)
+summary(Mydata1_norm)
+
+#To know distance between observations
+distance <- get_dist(Mydata1_norm)
+fviz_dist(distance)
+
+#K-means clustering algorithm using k=4
+k4 <- kmeans(Mydata1_norm, centers = 4, nstart = 25 )
+k4
+
+#Finding clustes size,center
+k4$cluster
+k4$centers
+k4$size
+
+#To view results of clutering
+fviz_cluster(k4,data= Mydata1_norm)
+
+#k=4 is seems to be reasonable but to find optimal k let us use WSs and silhouette method 
+fviz_nbclust(Mydata1_norm,kmeans,method = "wss")
+fviz_nbclust(Mydata1_norm,kmeans,method = "silhouette")
+
+#Using ailhouette method it is clearly noticed that k=3 is optimal value
+k3 <- kmeans(Mydata1_norm, centers = 3, nstart = 25 )
+k3
+
+#finding cluters size and centers
+k3$cluster
+k3$centers
+k3$size
+
+#k=3 is the optimal value 
+
+mydata_new <- data.frame(Mydata1_norm, k3$cluster)
+Mydata1 <- data.frame(Mydata1_norm, k3$cluster)
+
+##To view results of clutering when k=3
+fviz_cluster(k3,data= Mydata1_norm)
+
+#k=3 is the optimal value using silhouette method 
+```
+3.	Compare the summary statistics for each cluster and describe each cluster in this context (e.g., “Universities with high tuition, low acceptance rate...”).
+
+```{r }
+set.seed(123)
+k3_dist = kcca(Mydata1_norm, k=3, kccaFamily("kmedians"))
+k3_dist
+cluster_dist <- predict(k3_dist)
+set.seed(123)
+cluster<- data.frame(cluster_dist)
+Mydata_all <- cbind(Mydata_all, cluster)
+Mydata_all <-Mydata_all[-c(22)]
+head(Mydata_all)
+
+
+#combining room,board,add.fees,estimate bookcost,estimate personal cost together
+Mydata1$extra_fees <- Mydata1$room + Mydata1$board + Mydata1$add..fees + Mydata1$estim..book.costs + Mydata1$estim..personal..
+
+#Finding summary statistics without private and public column
+
+set.seed(123)
+Summary_stats <- Mydata_all %>% group_by(cluster_dist) %>%
+ summarise( AcceptanceRate =mean(X..appl..accepted),rect_rate=mean(X..appli..rec.d), 
+                 new_mean = mean(X..new.stud..enrolled), top10_mean = mean(X..new.stud..from.top.10.), top25_mean = mean(X..new.stud..from.top.25.), out_state_mean = mean(out.of.state.tuition), in_state_mean = mean(in.state.tuition), PHD_mean = mean(X..fac..w.PHD), stufac_mean = mean(stud..fac..ratio), graduation_mean = mean(Graduation.rate),room_mean=mean(room),board_mean=mean(board),add_mean=mean(add..fees),est_mean=mean(estim..book.costs),per_mean =mean(estim..personal..));
+head(Summary_stats)
+
+
+#Cluster1:It has more number of applications accepted and new students received.Good number of students from top 10 and top 25 universities.In state and out state tuition is also low of other clusters.So I refer this group as High Rating universities.
+#Cluster2:It has more number of graduation rate,in state and out state tuition.When compare to other clusters I would refer this group as Average Rating Universities.
+#Cluster3:When coming to this cluster most of the mean values are low and this can be referred as Low Rating Universities.
+```
+4.	Use the categorical measurements that were not used in the analysis (State and Private/Public) to characterize the different clusters. Is there any relationship between the clusters and the categorical information?
+```{r}
+#Summary statistics for State
+
+set.seed(123)
+summary_states <-Mydata_all%>% 
+             group_by(State) %>% summarise( AcceptanceRate = sum(X..appl..accepted)/ sum(X..appli..rec.d),new_mean=mean(X..new.stud..enrolled),top10_mean=mean(X..new.stud..from.top.10.),top25_mean=mean(X..new.stud..from.top.25.),out_state_mean=mean(out.of.state.tuition), in_state_mean=mean(in.state.tuition), PHD_mean=mean(X..fac..w.PHD), studfac_mean=mean(stud..fac..ratio), gradustio_mean=mean(Graduation.rate), private = sum(Public..1...Private..2. == 2), public = sum(Public..1...Private..2. == 1))
+head(summary_states)
+
+#Table for state and Number of universities in each cluster
+table(Mydata_all$State,Mydata_all$cluster_dist)
+
+#Summary statistics for Private
+
+set.seed(123)
+summary_Private <-Mydata_all%>% 
+  filter(Public..1...Private..2. == 2) %>% group_by(cluster_dist)  %>% summarise( Private=sum(Public..1...Private..2.==2),AcceptanceRate = sum(X..appl..accepted)/ sum(X..appli..rec.d),new_mean=mean(X..new.stud..enrolled),top10_mean=mean(X..new.stud..from.top.10.),top25_mean=mean(X..new.stud..from.top.25.),out_state_mean=mean(out.of.state.tuition), in_state_mean=mean(in.state.tuition), PHD_mean=mean(X..fac..w.PHD), studfac_mean=mean(stud..fac..ratio), gradustio_mean=mean(Graduation.rate))
+head(summary_Private)
+
+
+
+
+#Summary statistics for Public
+
+set.seed(123)
+summary_Public <-Mydata_all%>% 
+  filter(Public..1...Private..2. == 1) %>% group_by(cluster_dist)  %>% summarise(Public=sum(Public..1...Private..2.== 1),  AcceptanceRate = sum(X..appl..accepted)/ sum(X..appli..rec.d),new_mean=mean(X..new.stud..enrolled),top10_mean=mean(X..new.stud..from.top.10.),top25_mean=mean(X..new.stud..from.top.25.),out_state_mean=mean(out.of.state.tuition), in_state_mean=mean(in.state.tuition), PHD_mean=mean(X..fac..w.PHD), studfac_mean=mean(stud..fac..ratio), gradustio_mean=mean(Graduation.rate))
+head(summary_Public)
+
+#table for public and public in each cluster
+table(Mydata_all$Public..1...Private..2.,Mydata_all$cluster_dist)
+
+#Data visualization 
+library(ggplot2)
+
+#states vs clusters plot
+ggplot(Mydata_all,aes(x= cluster_dist,y = State))+geom_point()
+#states in terms of Public..1...Private..2. vs clusters
+ggplot(Mydata_all,aes(x= cluster_dist,y = State, color = Public..1...Private..2. ))+geom_point()
+
+#Public and private universities(categorical variables) has relationship in analysis the data and also provide insightfulness when analyzing  the clusters.
+
+```
+5.	What other external information can explain the contents of some or all of these clusters?
+External information like having more data,also more variables like neighbourhood crime rate,financial,academic reputation. 
+6.	Consider Tufts University, which is missing some information. Compute the Euclidean distance of this record from each of the clusters that you found above (using only the measurements that you have). Which cluster is it closest to? Impute the missing values for Tufts by taking the average of the cluster on those measurements. 
+```{r}
+
+k3 <- kmeans(Mydata1_norm, centers = 3, nstart = 25 )
+
+
+Tufts <- filter(Mydata, College.Name == "Tufts University")
+#Euclidean distance  from Cluster 1
+dist(rbind(Tufts[, -c(1, 2, 3,10)], k3$centers[1,]))
+#Euclidean distance  from Cluster 2
+dist(rbind(Tufts[, -c(1, 2, 3,10)], k3$centers[2,]))
+#Euclidean distance  from Cluster 3
+dist(rbind(Tufts[, -c(1, 2, 3,10)], k3$centers[3,]))
+
+#Imputing missing values 
+cluster_Tufts <- filter(Mydata_all, cluster_dist == 1)
+cluster_Mean <- mean(cluster_Tufts[,c(10)])
+Tufts[, c(10)] <- cluster_Mean
+cluster_Mean
+```
+
+```{r}
+
+```
+
