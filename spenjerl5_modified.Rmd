@@ -1,0 +1,235 @@
+---
+title: "Hierarchical Clustering"
+author: "Harika"
+date: "11/14/2019"
+output:
+  html_document: default
+  word_document: default
+---
+The dataset Cereals.csv includes nutritional information, store display, and consumer ratings for 77 breakfast cereals.
+Data Preprocessing. Remove all cereals with missing values.
+
+```{r }
+
+#Data preprocessing
+#Import data file
+cereal <- read.csv("Cereals.csv")
+str(cereal)
+head(cereal)
+
+#Removing missing values
+data_cereal <- na.omit(cereal)
+
+#Normalizing the data
+data_cereal <- scale(data_cereal[,c(4:16)])
+summary(data_cereal)
+```
+
+1.	Apply hierarchical clustering to the data using Euclidean distance to the normalized measurements. Use Agnes to compare the clustering from  single linkage, complete linkage, average linkage, and Ward. Choose the best method.
+
+
+```{r}
+library(GGally)
+library(dplyr)
+library(tidyverse) 
+library(cluster)    
+library(factoextra) 
+library(dendextend) # for comparing two dendrograms
+library(fpc)
+library(NbClust)
+library(compareDF)
+library(caret)
+#correlation between variables
+
+cereal %>% 
+  select(calories, protein, fat, sodium, fiber, carbo, sugars, potass,vitamins,rating) %>% 
+  ggcorr( label = TRUE, label_round =  2)
+
+#Euclidean method as distance
+d <- dist(data_cereal,method = "euclidean")
+
+#Appling hierarchical clustering using WARD method
+hc1 <- hclust(d,method = "ward.D2")
+
+#Plotting dendogram
+plot(hc1,cex=0.6,hang = -1)
+
+#Using agnes to compare different clustering methods.
+#Single Linkage
+hc_single <- agnes(data_cereal,method="single")
+print(hc_single$ac)
+pltree(hc_single, cex = 0.6, hang = -1)
+
+#complete linkage
+hc_complete <- agnes(data_cereal,method="complete")
+print(hc_complete$ac)
+pltree(hc_complete, cex = 0.6, hang = -1)
+
+#average linkage
+hc_average <- agnes(data_cereal,method="average")
+print(hc_average$ac)
+pltree(hc_average, cex = 0.6, hang = -1)
+
+#Ward method
+hc_ward <- agnes(data_cereal,method="ward")
+print(hc_ward$ac)
+pltree(hc_ward, cex = 0.6, hang = -1)
+
+
+#The best method to use is ward method since agglomerative coefficient is 0.904.
+
+
+```
+
+
+2.	How many clusters would you choose?
+
+```{r }
+#cutree function is useful to cut the dendogram 
+#suppose when clusters (k)=6
+
+points_hc <- cutree(hc1,k=6)
+plot(hc1)
+rect.hclust(hc1 , k = 6, border = 2:6)
+abline(h = 3, col = 'red')
+table(points_hc)
+
+#Using different colors for each clusters
+avg_dend_obj <- as.dendrogram(hc1)
+avg_col_dend <- color_branches(avg_dend_obj, h = 10)
+plot(avg_col_dend)
+
+#Visiualizing clusters
+data_cluster <- data.frame(cbind(data = data_cereal, cluster = points_hc))
+data_cereal1 <- data.frame(data_cereal)
+fviz_cluster(list(data = data_cereal, cluster = points_hc))
+#table(points_hc,data_cereal1$rating)
+
+#Using silhouette to analyse clusters
+plot(silhouette(cutree(hc_ward,6),d))
+datanew <- cereal[,c(-1,-2,-3)]
+
+# Silhouette width of observation
+
+res.hc <- eclust(datanew, "hclust", k = 6,
+                 method = "ward.D2", graph = FALSE) 
+head(res.hc$cluster, 15)
+fviz_dend(res.hc, rect = TRUE, show_labels = FALSE) 
+fviz_silhouette(res.hc)
+sil <- res.hc$silinfo$widths[, 1:3]
+
+# Objects with negative silhouette
+
+neg_sil_index <- which(sil[, 'sil_width'] < 0)
+sil[neg_sil_index, , drop = FALSE]
+
+
+```
+
+3.	Comment on the structure of the clusters and on their stability. 
+
+```{r}
+#Source:R-bloggers(online)
+k_choosen <- 6
+cboot.hclust <- clusterboot(data_cereal,clustermethod=hclustCBI,
+                           method="ward.D2", k=k_choosen)
+summary(cboot.hclust$result)
+
+#Returns a value of clusterlabels
+groups<-cboot.hclust$result$partition
+
+print(groups, k_choosen)  
+
+#The vector of cluster stabilities. 
+# Values close to 1 indicate stable clusters
+ cboot.hclust$bootmean    
+ 
+#The count of how many times each cluster was dissolved. By default clusterboot() runs 100  bootstrap iterations. 
+# Clusters that are dissolved often are unstable. 
+ cboot.hclust$bootbrd                                    
+
+```
+ To check stability,  partition the data and see how well clusters formed based on one part apply to the other part. To do this:
+1.	Cluster partition A
+2.	Use the cluster centroids from A to assign each record in partition B (each record is assigned to the cluster with the closest centroid).
+3.	Assess how consistent the cluster assignments are compared to the assignments based on all the data.
+```{r}
+
+set.seed(15)
+cereal_na <- na.omit(cereal)
+
+#data partition 
+#datap <- createDataPartition(cereal_na$sugars,p=0.5,list=FALSE)
+
+
+#dataA <- cereal_na[datap,]
+#dataB <- cereal_na[-datap,]
+
+dataA <- cereal_na[1:38,]
+dataB <- cereal_na[39:74,]
+
+dataA_num <- dataA[,c(-1,-2,-3)]
+dataB_num <- dataB[,c(-1,-2,-3)]
+
+#Normalising data
+dataA_norm <- data.frame(scale(dataA_num))
+dataB_norm <- data.frame(scale(dataB_num))
+
+#Performing Hierarchical Clustering
+d2 <- dist(dataA_norm,method = "euclidean")
+hc2 <- hclust(d2,method = "ward.D2")
+plot(hc2,cex=0.6,hang = -1)
+
+#Taking K=6
+
+points_hc <- cutree(hc2,k=6)
+plot(hc2)
+rect.hclust(hc2 , k = 6, border = 2:6)
+abline(h = 3, col = 'red')
+dataA_norm <- cbind(dataA_norm,cluster=points_hc)
+
+# partitioning data with each cluster
+
+clusters_partition1 <- subset(dataA_norm,cluster==1)
+clusters_partition2 <- subset(dataA_norm,cluster==2)
+clusters_partition3 <- subset(dataA_norm,cluster==3)
+clusters_partition4 <- subset(dataA_norm,cluster==4)
+clusters_partition5 <- subset(dataA_norm,cluster==5)
+clusters_partition6 <- subset(dataA_norm,cluster==6)
+
+
+#centroid of six clusters
+center1 <-apply (clusters_partition1, 2, function (x) tapply (x, clusters_partition1$cluster, mean))
+center2 <-apply (clusters_partition2, 2, function (x) tapply (x, clusters_partition2$cluster, mean))
+center3 <-apply (clusters_partition3, 2, function (x) tapply (x, clusters_partition3$cluster, mean))
+center4 <-apply (clusters_partition4, 2, function (x) tapply (x, clusters_partition4$cluster, mean))
+center5 <-apply (clusters_partition5, 2, function (x) tapply (x, clusters_partition5$cluster, mean))
+center6 <-apply (clusters_partition6, 2, function (x) tapply (x, clusters_partition6$cluster, mean))
+
+center <- rbind(center1,center2,center3,center4,center5,center6)
+center_new <- center[,-14]
+sequence <- data.frame(data =seq(1,36,1),cluster=rep(0,36))
+for(i in 1:36)
+{
+test <- data.frame(rbind(center_new,dataB_norm[i,]))
+dist <- as.matrix(get_dist(test))
+sequence[i,2] <- which.min(dist[7,-7])
+}
+
+sequence$cluster
+
+dataB_new <- cbind(dataB_norm,sequence$cluster)
+table(dataB_new$`sequence$cluster`==data_cluster[39:74,14])
+
+
+
+
+```
+
+4.	The elementary public schools would like to choose a set of cereals to include in their daily cafeterias. Every day a different cereal is offered, but all cereals should support a healthy diet. For this goal, you are requested to find a cluster of “healthy cereals.” Should the data be normalized? If not, how should they be used in the cluster analysis?
+```{r}
+center2 <-apply (data_cluster, 2, function (x) tapply (x, data_cluster$cluster, mean))
+#In general healthy cereals consider when high fiber,limit sugar,high protein, calories per serving so healthy diet comes under cluster 1 in this hierarchical clustering.
+#We no need to normalize the data since the variables are in same range.
+```
+
