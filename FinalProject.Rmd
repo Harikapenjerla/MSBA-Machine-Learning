@@ -1,0 +1,255 @@
+---
+title: "Project_ML"
+author: "Harika"
+date: "12/7/2019"
+output:
+  word_document: default
+  html_document: default
+---
+
+```{r}
+library(factoextra)
+library(hrbrthemes)
+library(GGally)
+library(viridis)
+```
+Problem Statement:
+CRISA has traditionally segmented markets on the basis of purchaser demographics. They would now like to segment the market based on two key sets of variables more directly related to the purchase process and to brand loyalty:
+1. Purchase behavior (volume, frequency, susceptibility to discounts, and brand loyalty)
+2. Basis of purchase (price, selling proposition)Doing so would allow CRISA to gain information about what demographic attributes are associated with different purchase behaviors and degrees of brand loyalty, and thus deploy promotion budgetsmore effectively. More effective market segmentation would enable CRISA’s clients (in this case, a firm called IMRB)to design more cost-effective promotions targeted at appropriate segments. Thus, multiple promotions could be launched, each targeted at different market segments at different times of the year. This would result in a more cost-effective allocation of the promotion budget to different market segments. It would also enable IMRB to design more effective customer reward systems and thereby increase brand loyalty.
+
+#Reading the data 
+```{r}
+data <- read.csv("BathSoap.csv")
+mydata_norm <- as.data.frame(scale(data))
+```
+
+#Finding Brand Loyalty
+```{r}
+BrandLoyal<-data[,23:30]
+Max_Brand<-apply(BrandLoyal, 1, max)
+Max_Brand<-as.data.frame(Max_Brand)
+BrandComp<-cbind(Max_Brand,data[,31])
+MaxLoyal<-as.data.frame(ifelse(BrandComp[,1]>=BrandComp[,2],1,0))
+MaxLoyalComp<-cbind(BrandComp,MaxLoyal)
+BathSoapComp<-cbind(data,MaxLoyal)
+data <- cbind(data,MaxLoyal)
+names(BathSoapComp)[47] <- "Brand_Loyal"
+names(data)[47] <- "Brand_Loyal"
+```
+
+#Data preparation
+```{r}
+data$SEC<-as.factor(data$SEC)
+data$SEX<-as.factor(data$SEX)
+data$AGE<-as.factor(data$AGE)
+data$EDU<-as.factor(data$EDU)
+data$HS<-as.factor(data$HS)
+data$CHILD<-as.factor(data$CHILD)
+data$CS<-as.factor(data$CS)
+data$Affluence.Index<-as.factor((data$Affluence.Index))
+```
+
+##1.(a)Purchase Behavior
+Purchase behavior variables includes volume, frequency, susceptibility to discounts, and brand loyalty
+```{r}
+#variables needed to analyse purchase behavior
+data_pb <-  data[,c(12:31)]
+data_pb <- as.data.frame(scale(data_pb))
+fviz_nbclust(data_pb, kmeans, method = "wss")
+#k-means
+set.seed(123)
+k1 <- kmeans(data_pb, centers =4 , nstart = 200) # k = 3
+
+# Size and Center for the Clusters
+k1$size
+k1_clusters <- data.frame(k1$centers)
+cluster <- matrix(c("1","2","3","4"),nrow = 4)
+k1.visual <- cbind(cluster,k1_clusters)
+
+#Cluster visiualization 
+fviz_cluster(k1, data = data_pb)
+
+#Parallel Plot
+ggparcoord(k1.visual,
+    columns = 2:21, groupColumn = 1, 
+    showPoints = TRUE, 
+    title = "Parallel Plot for Purchase Behavior",
+    alphaLines = 0.3
+    ) 
+```
+
+Analysis:
+Cluster1:Customers who are brand loyal to certain particular brand.
+Cluster2:Customer who are not particular brand loyal people.
+Cluster3 and Cluster4 :middling all factors with differences in no.of brands,brand runs.
+
+After doing kmeans clustering for purhase behavior alone.Now add demographics and loyalty to purchase behavior
+```{r}
+data_pb1 <- data[,c(1:31,47)]
+data_pb1[,33]<-data.frame(k1$cluster)
+
+library(ggplot2)
+data_pb1$Brand_Loyal<-as.factor(data_pb1$Brand_Loyal)
+ggplot(data_pb1) +
+ aes(x =No..of.Brands,fill = Brand_Loyal ) +
+ geom_bar() +
+ scale_fill_hue() +
+ theme_minimal() +
+ facet_wrap(vars(k1.cluster))
+
+#lets consider SEC,Brand_Loyal and  in four clusters.
+library(ggplot2)
+data_pb1$Brand_Loyal<-as.factor(data_pb1$Brand_Loyal)
+ggplot(data_pb1) +
+ aes(x = SEC,fill = Brand_Loyal ) +
+ geom_bar() +
+ scale_fill_hue() +
+ theme_minimal() +
+ facet_wrap(vars(k1.cluster))
+```
+
+
+#(b)Basis of purchase
+Basis of purchase (price, selling proposition)
+
+```{r}
+
+data_bp <- BathSoapComp[,c(32:46)]
+data_bp <- data.frame(scale(data_bp))
+
+fviz_nbclust(data_bp, kmeans, method = "wss")
+
+set.seed(123)
+k2 <- kmeans(data_bp, centers =3 , nstart = 500)
+
+
+# Size and Center for the Clusters
+k2$size
+k2_clusters <- data.frame(k2$centers)
+cluster <- matrix(c("1","2","3"),nrow = 3)
+k2.visual <- cbind(cluster,k2_clusters)
+
+#cluster visualization
+fviz_cluster(k2, data = data_bp)
+
+#Parallel Plot
+ggparcoord(k2.visual,
+    columns = 2:15, groupColumn = 1, 
+    showPoints = TRUE, 
+    title = "Parallel Plot for Basis of Purchase",
+    alphaLines = 0.3
+    ) 
+
+
+```
+When k=2
+Cluster1:n=78 which has Price Cat:1,2,4 and prop cat 4 to 13 ,15 are low and Price catagory 3,prop cat.14 are high 
+Cluster2 :n=522 which shows excatly opposite to cluster1 
+In this k=2 analysis it is unclear so about customers trend in most of the parameters.
+
+when k=3
+Cluster1:n=376 which has Pr.cat.2 ,4 high.Middling all other values
+Cluster2:n= 79 which has characteristics price cat 3 and Prop.Cat14 high.All other are low.
+Cluster3:n=145 which has Pr.cat.1,Prop.Cat.6,10,12,13 high volume.
+
+
+#(c)The variables that describe both purchase behavior and basis of purchase
+```{r}
+data_both <- BathSoapComp[,c(12:47)]
+data_both <- data.frame(scale(data_both))
+
+#k-means
+set.seed(123)
+fviz_nbclust(data_both, kmeans, method = "wss")
+
+set.seed(123)
+k3 <- kmeans(data_both, centers =3 , nstart = 500) 
+
+# Size and Center for the Clusters
+k3$size
+k3_clusters <- data.frame(k3$centers)
+cluster <- matrix(c("1","2","3"),nrow = 3)
+k3.visual <- cbind(cluster,k3_clusters)
+
+#cluster visualization
+fviz_cluster(k3, data = data_both)
+
+#Parallel Plot
+ggparcoord(k3.visual,
+    columns = 2:13, groupColumn = 1, 
+    showPoints = TRUE, 
+    title = "Parallel Plot for both Purchase Behavior and Basis of PUrchase",
+    alphaLines = 0.3
+    ) 
+ggparcoord(k3.visual,
+    columns = 14:28, groupColumn = 1, 
+    showPoints = TRUE, 
+    title = "Parallel Plot for both Purchase Behavior and Basis of PUrchase",
+    alphaLines = 0.3
+    ) 
+```
+
+
+Now add demographics and analyse the data
+```{r}
+data_all <- data[,c(1:47)]
+data_all[,48]<-data.frame(k3$cluster)
+
+library(ggplot2)
+data_all$Brand_Loyal<-as.factor(data_all$Brand_Loyal)
+ggplot(data_all) +
+ aes(x = Brand.Runs,fill = Brand_Loyal ) +
+ geom_bar() +
+ scale_fill_hue() +
+ theme_minimal() +
+ facet_wrap(vars(k3.cluster))
+
+#lets consider SEC,Brand_Loyal and  in three clusters.
+library(ggplot2)
+data_all$Brand_Loyal<-as.factor(data_all$Brand_Loyal)
+ggplot(data_all) +
+ aes(x = SEC,fill = Brand_Loyal ) +
+ geom_bar() +
+ scale_fill_hue() +
+ theme_minimal() +
+ facet_wrap(vars(k3.cluster))
+```
+
+whenk=3
+Cluster3:shows high brand loyal customers and their characteristics
+Cluster2:Low brand loyal customers and their characteristics.
+
+#3.Develop a model that classifies the data into these segments. Since this information would most likely be used in targeting direct-mail promotions, it would be useful to select a market segment that would be defined as a success in the classification model.
+In this model I'm considering some variables like value,trans brand runs,vol.trans,avg price and all three promotions categories.
+```{r}
+data_classification <- data[,c(16:22)]
+data_classnorm <- as.data.frame(scale(data_classification))
+
+
+set.seed(123)
+k4 <- kmeans(data_classnorm, centers =2 , nstart = 500) 
+
+# Size and Center for the Clusters
+k4$size
+k4_clusters <- data.frame(k4$centers)
+cluster <- matrix(c("1","2"),nrow = 2)
+k4.visual <- cbind(cluster,k4_clusters)
+
+#cluster visualization
+fviz_cluster(k4, data = data_classnorm)
+
+#Parallel Plot
+ggparcoord(k4.visual,
+    columns = 2:8, groupColumn = 1, 
+    showPoints = TRUE, 
+    title = "Parallel Plot for both Purchase Behavior and Basis of PUrchase",
+    alphaLines = 0.3
+    ) 
+
+```
+
+Cluster2:Shows customers behavior when there is some kind of promotions. 
+Cluster1:Shows behavior when there is no promotions.
+In this case cluster/group two is success because they respond to the promotions.
+
